@@ -1,0 +1,18 @@
+<?xml version="1.0"?>
+<users>
+    <user id="admin">
+        <username>Admin</username>
+        <role>Admin</role>
+        <password>password123</password>
+    </user>
+    <user id="id">
+        <username>Rinti</username>
+        <role>User</role>
+        <password>choklad</password>
+    </user>
+    <user id="id">
+        <username>Otto</username>
+        <role>User</role>
+        <password>korv</password>
+    </user>
+</users>
