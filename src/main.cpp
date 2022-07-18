@@ -52,8 +52,8 @@ int main()
       std::cin >> username;
       std::cout << "password\n";
       std::cin >> password;
-      bool logged_in = authenticator_api::login(username, password);
-      if (logged_in)
+      std::uint64_t logged_in = authenticator_api::login(username, password);
+      if (logged_in > 0)
       {
         std::cout << "Succesefully logged in\n";
       }

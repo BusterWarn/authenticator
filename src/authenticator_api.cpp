@@ -8,8 +8,14 @@
 #include <ostream>
 #include <memory>
 #include <stdexcept>
+#include <chrono>
 
 #include "tinyxml2.h"
+
+#define HASH_LOGIN_FILE "hashed_logins.xml"
+#define HASH_ROOT_ELEMENT_STR "hashes"
+#define HASH_ELEMENT_STR "hashed_login"
+#define HASH_TIME_ATTRIBUTE_STR "time"
 
 #define USER_FILE "users.xml"
 #define USER_STR "user"
@@ -20,6 +26,53 @@
 
 namespace authenticator_api
 {
+  /**
+   * djb2 hash function. No idea what it does but it works!
+   */
+  std::uint64_t simple_hash(const char *str)
+  {
+      std::uint64_t hash = 5381;
+      int c;
+      while ((c = *str++))
+      {
+          hash = ((hash << 5) + hash) + c; /* hash * 33 + c */
+      }
+      if (hash == 0)
+      {
+        hash++;
+      }
+
+      return hash;
+  }
+
+  // Code from https://stackoverflow.com/questions/2342162/stdstring-formatting-like-sprintf
+  template<typename ... Args>
+  std::unique_ptr<char[]> c_string_format( const char* format, Args ... args )
+  {
+    int size_s = std::snprintf( nullptr, 0, format, args ... ) + 1; // Extra space for '\0'
+    if( size_s <= 0 ) { throw std::runtime_error( "Error during formatting." ); }
+    auto size = static_cast<size_t>( size_s );
+    std::unique_ptr<char[]> buf( new char[ size ] );
+    std::snprintf( buf.get(), size, format, args ... );
+    return buf;
+  }
+
+  template<typename ... Args>
+  std::string string_format( const char* format, Args ... args )
+  {
+    int size_s = std::snprintf( nullptr, 0, format, args ... );
+    if( size_s <= 0 ) { throw std::runtime_error( "Error during formatting." ); }
+    auto size = static_cast<size_t>( size_s );
+    std::unique_ptr<char[]> buf = c_string_format(format, args ...);
+    return std::string( buf.get(), buf.get() + size ); // We don't want the '\0' inside
+  }
+  
+  std::uint64_t get_current_time()
+  {
+    const auto system_clock = std::chrono::system_clock::now();
+    return std::chrono::duration_cast<std::chrono::seconds>(system_clock.time_since_epoch()).count();
+  }
+
   void user_t::print() const
   {
     std::cout << "User: " << username <<
@@ -35,18 +88,6 @@ namespace authenticator_api
           " Password: "  << user.password <<
           " id: " << user.id;
     return os;
-  }
-
-  // Code from https://stackoverflow.com/questions/2342162/stdstring-formatting-like-sprintf
-  template<typename ... Args>
-  std::string string_format( const char* format, Args ... args )
-  {
-    int size_s = std::snprintf( nullptr, 0, format, args ... ) + 1; // Extra space for '\0'
-    if( size_s <= 0 ) { throw std::runtime_error( "Error during formatting." ); }
-    auto size = static_cast<size_t>( size_s );
-    std::unique_ptr<char[]> buf( new char[ size ] );
-    std::snprintf( buf.get(), size, format, args ... );
-    return std::string( buf.get(), buf.get() + size - 1 ); // We don't want the '\0' inside
   }
 
   [[nodiscard]] std::string user_interal_to_xml_string(const user_t& internal_user)
@@ -155,6 +196,69 @@ namespace authenticator_api
     }
 
     return nullptr;
+  }
+
+  [[nodiscard]] tinyxml2::XMLElement* get_hash_element(tinyxml2::XMLDocument& hash_doc,
+                                                       const std::uint64_t hash)
+  {
+    const std::uint64_t current_time = get_current_time();
+
+    auto hash_root_p =  hash_doc.FirstChildElement(HASH_ROOT_ELEMENT_STR);
+    auto hash_element_p = hash_root_p->FirstChildElement();
+    while (hash_element_p != nullptr)
+    {
+      try
+      {
+        std::cerr << "KOm hit! :D\n";
+        std::uint64_t hash_value = std::stoul(hash_element_p->GetText());
+        if (hash_value == hash)
+        {
+          return hash_element_p;
+        }
+      }
+      catch(const std::exception& e)
+      {
+        std::cerr << __FILE__ << ':' << __LINE__ << "ERROR: " << e.what()
+                  << " invalid hash: " << hash_element_p->GetText() << '\n';
+        return nullptr;
+      }
+      
+      hash_element_p = hash_element_p->NextSiblingElement();
+    }
+
+    std::cerr << "RETURN NULLPTR" << std::endl;
+    return nullptr;
+  }
+
+  [[nodiscard]] tinyxml2::XMLError store_hash(std::uint64_t hash)
+  {
+    tinyxml2::XMLDocument hash_doc;
+    auto result = hash_doc.LoadFile(HASH_LOGIN_FILE);
+    if (result != tinyxml2::XML_SUCCESS)
+    {
+      std::cerr << __FILE__ << ":" << __LINE__ << " ERROR: " << result << '\n';
+      return result;
+    }
+    const std::uint64_t current_time = get_current_time();
+
+    auto hash_element_p = get_hash_element(hash_doc, hash);
+    if (hash_element_p)
+    {
+      hash_element_p->SetAttribute(HASH_TIME_ATTRIBUTE_STR, current_time);
+    }
+    else
+    {
+      hash_element_p = hash_doc.NewElement(HASH_ELEMENT_STR);
+      assert(hash_element_p);
+      hash_element_p->SetAttribute(HASH_TIME_ATTRIBUTE_STR, current_time);
+      hash_element_p->SetText(hash);
+
+      auto hash_root_p =  hash_doc.FirstChildElement(HASH_ROOT_ELEMENT_STR);
+      hash_root_p->LinkEndChild(hash_element_p);
+    }
+
+    hash_doc.SaveFile(HASH_LOGIN_FILE);
+    return hash_doc.ErrorID();
   }
 
   void add_user(const std::string& username,
@@ -274,31 +378,38 @@ namespace authenticator_api
     return users;
   }
 
-  bool login(const std::string& username,
-            const std::string& password)
+  std::uint64_t login(const std::string& username,
+                      const std::string& password)
   {
     tinyxml2::XMLDocument doc;
     tinyxml2::XMLError result = doc.LoadFile(USER_FILE);
     if (result != tinyxml2::XML_SUCCESS)
     {
       std::cerr << __FILE__ << ':' << __LINE__ << " ERROR: " << result << '\n';
-      return false;
+      return 0;
     }
 
     auto user_xml_element_p = get_user(doc, username);
 
     if (!user_xml_element_p)
     {
-      return false;
+      return 0;
     }
 
     auto user_interal = user_xml_element_to_interal(user_xml_element_p);
     if (user_interal.password != password)
     {
-      return false;
+      return 0;
     }
-    
-    return true;
+
+    std::uint64_t hash = simple_hash(c_string_format("%s%s", username.c_str(), password.c_str()).get());
+    result = store_hash(hash);
+    if (result != tinyxml2::XML_SUCCESS)
+    {
+      return 0;
+    }
+
+    return hash;
   }
 
 }

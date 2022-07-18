@@ -39,7 +39,7 @@ void remove_user(const std::string& username);
 
 std::vector<user_t> get_users();
 
-bool login(const std::string& username,
-           const std::string& password);
+std::uint64_t login(const std::string& username,
+                    const std::string& password);
 
 }
