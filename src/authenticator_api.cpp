@@ -274,4 +274,31 @@ namespace authenticator_api
     return users;
   }
 
+  bool login(const std::string& username,
+            const std::string& password)
+  {
+    tinyxml2::XMLDocument doc;
+    tinyxml2::XMLError result = doc.LoadFile(USER_FILE);
+    if (result != tinyxml2::XML_SUCCESS)
+    {
+      std::cerr << __FILE__ << ':' << __LINE__ << " ERROR: " << result << '\n';
+      return false;
+    }
+
+    auto user_xml_element_p = get_user(doc, username);
+
+    if (!user_xml_element_p)
+    {
+      return false;
+    }
+
+    auto user_interal = user_xml_element_to_interal(user_xml_element_p);
+    if (user_interal.password != password)
+    {
+      return false;
+    }
+    
+    return true;
+  }
+
 }

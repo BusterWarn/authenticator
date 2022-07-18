@@ -4,7 +4,7 @@
 
 int main()
 {
-  std::cout << "What would you like to do? Print users (P) Add user (A) Remove user (R)" << std::endl;
+  std::cout << "What would you like to do? Print users (P) Add user (A) Remove user (R) Login (L)" << std::endl;
   char user_choice;
   std::cin >> user_choice;
 
@@ -41,6 +41,26 @@ int main()
       std::cin >> username;
 
       authenticator_api::remove_user(username);
+      break;
+    }
+    case 'l':
+    case 'L':
+    {
+      std::string username;
+      std::string password;
+      std::cout << "username\n";
+      std::cin >> username;
+      std::cout << "password\n";
+      std::cin >> password;
+      bool logged_in = authenticator_api::login(username, password);
+      if (logged_in)
+      {
+        std::cout << "Succesefully logged in\n";
+      }
+      else
+      {
+        std::cout << "Invalid username or password\n";
+      }
       break;
     }
     default:
