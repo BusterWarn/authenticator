@@ -82,10 +82,10 @@ namespace authenticator_api
 
   [[nodiscard]] user_t user_xml_element_to_interal(const tinyxml2::XMLElement* user_element_p)
   {
-    const tinyxml2::XMLElement* username_p = user_element_p->FirstChildElement("username");
-    const tinyxml2::XMLElement* role_p = user_element_p->FirstChildElement("role");
-    const tinyxml2::XMLElement* password_p = user_element_p->FirstChildElement("password");
-    const tinyxml2::XMLAttribute* id_p = user_element_p->FindAttribute("id");
+    const tinyxml2::XMLElement* username_p = user_element_p->FirstChildElement(USERNAME_STR);
+    const tinyxml2::XMLElement* role_p = user_element_p->FirstChildElement(ROLE_STR);
+    const tinyxml2::XMLElement* password_p = user_element_p->FirstChildElement(PASSWORD_STR);
+    const tinyxml2::XMLAttribute* id_p = user_element_p->FindAttribute(ID_STR);
     assert(username_p);
     assert(role_p);
     assert(password_p);
@@ -118,7 +118,7 @@ namespace authenticator_api
       return result;
     }
     assert(root_p);
-    tinyxml2::XMLElement* user_p = root_p->FirstChildElement("user");
+    tinyxml2::XMLElement* user_p = root_p->FirstChildElement(USER_STR);
     assert(user_p);
 
     while (user_p != nullptr)
@@ -150,12 +150,12 @@ namespace authenticator_api
       return;
     }
 
-    auto p = std::find_if(users.begin(), users.end(), [&username] (const user_t& user)
+    auto user_it = std::find_if(users.begin(), users.end(), [&username] (const user_t& user)
       {
         return user.username == username;
       });
 
-    if (p != users.end())
+    if (user_it != users.end())
     {
       std::cout << "User '" << username << "' already exists.\n";
       return;
