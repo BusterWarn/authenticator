@@ -4,7 +4,7 @@
 
 int main()
 {
-  std::cout << "What would you like to do? Print users (P) or add user (A)" << std::endl;
+  std::cout << "What would you like to do? Print users (P) Add user (A) Remove user (R)" << std::endl;
   char user_choice;
   std::cin >> user_choice;
 
@@ -31,6 +31,16 @@ int main()
       std::cin >> password;
 
       authenticator_api::add_user(username, "id", "User", password);
+      break;
+    }
+    case 'r':
+    case 'R':
+    {
+      std::string username;
+      std::cout << "username\n";
+      std::cin >> username;
+
+      authenticator_api::remove_user(username);
       break;
     }
     default:

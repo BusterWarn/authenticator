@@ -130,6 +130,33 @@ namespace authenticator_api
     return tinyxml2::XML_SUCCESS;
   }
 
+  [[nodiscard]] tinyxml2::XMLElement* get_user(tinyxml2::XMLDocument& doc,
+                                               const std::string& username)
+  {
+    tinyxml2::XMLError result;
+    tinyxml2::XMLElement* root_p = load_root_element(doc, result);
+    if (result != tinyxml2::XML_SUCCESS)
+    {
+      std::cerr << __FILE__ << ':' << __LINE__ << " ERROR: " << result << '\n';
+      return nullptr;
+    }
+    assert(root_p);
+    tinyxml2::XMLElement* user_p = root_p->FirstChildElement(USER_STR);
+    assert(user_p);
+
+    while (user_p != nullptr)
+    {
+      const tinyxml2::XMLElement* username_p = user_p->FirstChildElement(USERNAME_STR);
+      if (username_p->GetText() == username)
+      {
+        return user_p;
+      }
+      user_p = user_p->NextSiblingElement();
+    }
+
+    return nullptr;
+  }
+
   void add_user(const std::string& username,
                 const std::string& id,
                 const std::string& role,
@@ -176,6 +203,54 @@ namespace authenticator_api
     std::cout << "User added:\n" << user_interal_to_xml_string(new_user) << '\n';
     root_p->LinkEndChild(user_xml_element_p);
     
+    doc.SaveFile(USER_FILE);
+  }
+
+  void remove_user(const std::string& username)
+  {
+    tinyxml2::XMLDocument doc;
+    tinyxml2::XMLError result = doc.LoadFile(USER_FILE);
+    if (result != tinyxml2::XML_SUCCESS)
+    {
+      std::cerr << __FILE__ << ':' << __LINE__ << " ERROR: " << result << '\n';
+      return;
+    }
+
+    std::vector<user_t> users;
+    result = load_all_users(doc, users);
+    if (result != tinyxml2::XML_SUCCESS)
+    {
+      return;
+    }
+
+    auto user_it = std::find_if(users.begin(), users.end(), [&username] (const user_t& user)
+      {
+        return user.username == username;
+      });
+
+    if (user_it == users.end())
+    {
+      std::cout << "User '" << username << "' does not exist.\n";
+      return;
+    }
+
+    auto user_xml_element_p = get_user(doc, (*user_it).username);
+    if (!user_xml_element_p)
+    {
+      std::cerr << __FILE__ << ':' << __LINE__ << " ERROR: Could not fetch user from XML doc" << '\n';
+      return;
+    }
+
+    tinyxml2::XMLElement* root_p = load_root_element(doc, result);
+    if (result != tinyxml2::XML_SUCCESS)
+    {
+      std::cerr << __FILE__ << ':' << __LINE__ << " ERROR: " << result << '\n';
+      return;
+    }
+    assert(root_p);
+
+    root_p->DeleteChild(user_xml_element_p);
+    std::cout << "User deleted:\n" << user_interal_to_xml_string(*user_it) << '\n';
     doc.SaveFile(USER_FILE);
   }
 

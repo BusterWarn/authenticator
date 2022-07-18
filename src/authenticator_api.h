@@ -35,6 +35,8 @@ void add_user(const std::string& username,
               const std::string& role,
               const std::string& password);
 
+void remove_user(const std::string& username);
+
 std::vector<user_t> get_users();
 
 }
