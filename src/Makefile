@@ -1,7 +1,7 @@
 
 CXX=g++
-CXXLAGS=-std=c++20 -g -Wall -Wextra -Werror -Wpedantic -Wmissing-declarations -Wreturn-type \
-        -Wparentheses -Wunused -Wundef -Wshadow -Wswitch-default -Wunreachable-code -w #TODO fix errors and remove -w
+CXXLAGS=-std=c++20 -g -Wall -Wextra -Werror -Wpedantic -Wreturn-type \
+        -Wparentheses -Wunused -Wundef -Wshadow -Wswitch-default -Wunreachable-code
 
 SRC=${wildcard *.cpp}
 OBJ=${patsubst %.cpp,build/%.o,${SRC}}

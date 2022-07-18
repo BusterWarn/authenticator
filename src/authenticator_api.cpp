@@ -201,15 +201,12 @@ namespace authenticator_api
   [[nodiscard]] tinyxml2::XMLElement* get_hash_element(tinyxml2::XMLDocument& hash_doc,
                                                        const std::uint64_t hash)
   {
-    const std::uint64_t current_time = get_current_time();
-
     auto hash_root_p =  hash_doc.FirstChildElement(HASH_ROOT_ELEMENT_STR);
     auto hash_element_p = hash_root_p->FirstChildElement();
     while (hash_element_p != nullptr)
     {
       try
       {
-        std::cerr << "KOm hit! :D\n";
         std::uint64_t hash_value = std::stoul(hash_element_p->GetText());
         if (hash_value == hash)
         {
@@ -292,7 +289,7 @@ namespace authenticator_api
       return;
     }
 
-    user_t new_user = user_t(username, "id", "User", password);
+    user_t new_user = user_t(username, id, role, password);
     users.push_back(new_user);
     auto user_xml_element_p = user_interal_to_xml_element(doc, new_user);
 
