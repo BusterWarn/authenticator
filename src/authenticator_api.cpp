@@ -12,10 +12,10 @@
 
 #include "tinyxml2.h"
 
-#define HASH_LOGIN_FILE "hashed_logins.xml"
-#define HASH_ROOT_ELEMENT_STR "hashes"
-#define HASH_ELEMENT_STR "hashed_login"
-#define HASH_TIME_ATTRIBUTE_STR "time"
+#define HASH_TOKEN_FILE "hashed_tokens.xml"
+#define TOKEN_ROOT_ELEMENT_STR "hashed_tokens"
+#define TOKEN_ELEMENT_STR "hashed_token"
+#define TOKEN_TIME_ATTRIBUTE_STR "time"
 
 #define USER_FILE "users.xml"
 #define USER_STR "user"
@@ -29,7 +29,7 @@ namespace authenticator_api
   /**
    * djb2 hash function. No idea what it does but it works!
    */
-  std::uint64_t simple_hash(const char *str)
+  std::uint64_t stupid_hash(const char *str)
   {
       std::uint64_t hash = 5381;
       int c;
@@ -198,39 +198,38 @@ namespace authenticator_api
     return nullptr;
   }
 
-  [[nodiscard]] tinyxml2::XMLElement* get_hash_element(tinyxml2::XMLDocument& hash_doc,
-                                                       const std::uint64_t hash)
+  [[nodiscard]] tinyxml2::XMLElement* get_token_element(tinyxml2::XMLDocument& token_doc,
+                                                        const std::uint64_t hashed_token)
   {
-    auto hash_root_p =  hash_doc.FirstChildElement(HASH_ROOT_ELEMENT_STR);
-    auto hash_element_p = hash_root_p->FirstChildElement();
-    while (hash_element_p != nullptr)
+    auto token_root_p =  token_doc.FirstChildElement(TOKEN_ROOT_ELEMENT_STR);
+    auto token_element_p = token_root_p->FirstChildElement();
+    while (token_element_p != nullptr)
     {
       try
       {
-        std::uint64_t hash_value = std::stoul(hash_element_p->GetText());
-        if (hash_value == hash)
+        std::uint64_t stored_token = std::stoul(token_element_p->GetText());
+        if (stored_token == hashed_token)
         {
-          return hash_element_p;
+          return token_element_p;
         }
       }
       catch(const std::exception& e)
       {
         std::cerr << __FILE__ << ':' << __LINE__ << "ERROR: " << e.what()
-                  << " invalid hash: " << hash_element_p->GetText() << '\n';
+                  << " invalid hash: " << token_element_p->GetText() << '\n';
         return nullptr;
       }
       
-      hash_element_p = hash_element_p->NextSiblingElement();
+      token_element_p = token_element_p->NextSiblingElement();
     }
 
-    std::cerr << "RETURN NULLPTR" << std::endl;
     return nullptr;
   }
 
-  [[nodiscard]] tinyxml2::XMLError store_hash(std::uint64_t hash)
+  [[nodiscard]] tinyxml2::XMLError store_token(const std::uint64_t hashed_token)
   {
-    tinyxml2::XMLDocument hash_doc;
-    auto result = hash_doc.LoadFile(HASH_LOGIN_FILE);
+    tinyxml2::XMLDocument token_doc;
+    auto result = token_doc.LoadFile(HASH_TOKEN_FILE);
     if (result != tinyxml2::XML_SUCCESS)
     {
       std::cerr << __FILE__ << ":" << __LINE__ << " ERROR: " << result << '\n';
@@ -238,24 +237,24 @@ namespace authenticator_api
     }
     const std::uint64_t current_time = get_current_time();
 
-    auto hash_element_p = get_hash_element(hash_doc, hash);
-    if (hash_element_p)
+    auto token_element_p = get_token_element(token_doc, hashed_token);
+    if (token_element_p)
     {
-      hash_element_p->SetAttribute(HASH_TIME_ATTRIBUTE_STR, current_time);
+      token_element_p->SetAttribute(TOKEN_TIME_ATTRIBUTE_STR, current_time);
     }
     else
     {
-      hash_element_p = hash_doc.NewElement(HASH_ELEMENT_STR);
-      assert(hash_element_p);
-      hash_element_p->SetAttribute(HASH_TIME_ATTRIBUTE_STR, current_time);
-      hash_element_p->SetText(hash);
+      token_element_p = token_doc.NewElement(TOKEN_ELEMENT_STR);
+      assert(token_element_p);
+      token_element_p->SetAttribute(TOKEN_TIME_ATTRIBUTE_STR, current_time);
+      token_element_p->SetText(hashed_token);
 
-      auto hash_root_p =  hash_doc.FirstChildElement(HASH_ROOT_ELEMENT_STR);
-      hash_root_p->LinkEndChild(hash_element_p);
+      auto token_root_p =  token_doc.FirstChildElement(TOKEN_ROOT_ELEMENT_STR);
+      token_root_p->LinkEndChild(token_element_p);
     }
 
-    hash_doc.SaveFile(HASH_LOGIN_FILE);
-    return hash_doc.ErrorID();
+    token_doc.SaveFile(HASH_TOKEN_FILE);
+    return token_doc.ErrorID();
   }
 
   void add_user(const std::string& username,
@@ -399,8 +398,8 @@ namespace authenticator_api
       return 0;
     }
 
-    std::uint64_t hash = simple_hash(c_string_format("%s%s", username.c_str(), password.c_str()).get());
-    result = store_hash(hash);
+    std::uint64_t hash = stupid_hash(c_string_format("%s%s", username.c_str(), password.c_str()).get());
+    result = store_token(hash);
     if (result != tinyxml2::XML_SUCCESS)
     {
       return 0;
