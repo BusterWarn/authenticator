@@ -7,7 +7,6 @@
 #include <algorithm>
 #include <ostream>
 #include <memory>
-#include <stdexcept>
 #include <chrono>
 
 #include "tinyxml2.h"
