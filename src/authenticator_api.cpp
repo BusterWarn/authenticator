@@ -24,6 +24,8 @@
 #define ROLE_STR "role"
 #define PASSWORD_STR "password"
 
+constexpr std::uint64_t TOKEN_EXPIRATION_TIME = 10; // 10 seconds
+
 namespace authenticator_api
 {
   /**
@@ -226,6 +228,36 @@ namespace authenticator_api
     return nullptr;
   }
 
+  [[nodiscard]] bool has_token_expired(tinyxml2::XMLDocument& token_doc,
+                                       const std::uint64_t hashed_token)
+  {
+    auto token_element_p = get_token_element(token_doc, hashed_token);
+    if (!token_element_p)
+    {
+      std::cout << __FILE__ << ':' << __LINE__ << " Token " << hashed_token << " does not exist\n";
+      return true;
+    }
+
+    try
+    {
+      std::uint64_t token_timestamp = std::stoul(token_element_p->Attribute(TOKEN_TIME_ATTRIBUTE_STR));
+      std::uint64_t current_time = get_current_time();
+      assert(current_time > token_timestamp);
+      std::uint64_t token_passed_time = current_time - token_timestamp;
+      if (token_passed_time > TOKEN_EXPIRATION_TIME)
+      {
+        return true;
+      }
+    }
+    catch(const std::exception& e)
+    {
+      std::cerr << __FILE__ << ':' << __LINE__ << "ERROR: " << e.what()
+                << " invalid hash: " << token_element_p->GetText() << '\n';
+      return true;
+    }
+    return false;
+  }
+
   [[nodiscard]] tinyxml2::XMLError store_token(const std::uint64_t hashed_token)
   {
     tinyxml2::XMLDocument token_doc;
@@ -240,6 +272,10 @@ namespace authenticator_api
     auto token_element_p = get_token_element(token_doc, hashed_token);
     if (token_element_p)
     {
+      if (has_token_expired(token_doc, hashed_token))
+      {
+        std::cout << "Token is previously expired\n";
+      }
       token_element_p->SetAttribute(TOKEN_TIME_ATTRIBUTE_STR, current_time);
     }
     else
