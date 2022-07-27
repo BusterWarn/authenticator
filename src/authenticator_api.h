@@ -1,45 +1,51 @@
 #pragma once
 
 #include <string>
-#include <ostream>
-#include <vector>
 
 namespace authenticator_api
 {
 
-struct [[nodiscard]] user_t
-{
-  std::string username;
-  std::string id;
-  std::string role;
-  std::string password;
+    enum class response_code
+    {
+      OK_200 = 200,
+      CREATED_201 = 201,
+      BAD_REQUEST_400 = 400,
+      UNAUTHORIZED_401 = 401,
+      NOT_FOUND_404 = 404,
+      INTERNAL_SERVER_ERROR_500 = 500
+    };
 
-  user_t(const std::string username_input,
-         const std::string id_input,
-         const std::string role_input,
-         const std::string password_input)
-         : username(username_input),
-           id(id_input),
-           role(role_input),
-           password(password_input)
-  {
-  }
+    struct [[nodiscard]] response
+    {
+        response_code response_codee;
+        std::uint64_t authorization; 
 
-  void print() const;
-};
+        std::string body;
 
-std::ostream& operator <<(std::ostream& os, const user_t& user);
+        response(const response_code input_response_code,
+                 const std::uint64_t input_authorization,
+                 const std::string& input_body)
+        : response_codee(input_response_code),
+          authorization(input_authorization),
+          body(input_body)
+        {
+        }
 
-void add_user(const std::string& username,
-              const std::string& id,
-              const std::string& role,
-              const std::string& password);
+        void print() const;
+    };
 
-void remove_user(const std::string& username);
+  const response add_user(const std::uint64_t authorization_token,
+                          const std::string& username,
+                          const std::string& id,
+                          const std::string& role,
+                          const std::string& password);
 
-std::vector<user_t> get_users();
+  const response remove_user(const std::uint64_t authorization_token,
+                             const std::string& username);
 
-std::uint64_t login(const std::string& username,
-                    const std::string& password);
+  const response get_users(const std::uint64_t authorization_token);
+
+  const response login(const std::string& username,
+                       const std::string& password);
 
 }

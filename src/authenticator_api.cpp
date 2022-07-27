@@ -6,6 +6,7 @@
 #include <vector>
 #include <algorithm>
 #include <ostream>
+#include <sstream>
 #include <memory>
 #include <chrono>
 
@@ -23,7 +24,7 @@
 #define ROLE_STR "role"
 #define PASSWORD_STR "password"
 
-constexpr std::uint64_t TOKEN_EXPIRATION_TIME = 10; // 10 seconds
+constexpr std::uint64_t TOKEN_EXPIRATION_TIME = 60; // 60 seconds
 
 namespace authenticator_api
 {
@@ -74,13 +75,33 @@ namespace authenticator_api
     return std::chrono::duration_cast<std::chrono::seconds>(system_clock.time_since_epoch()).count();
   }
 
-  void user_t::print() const
+
+  struct [[nodiscard]] user_t
   {
-    std::cout << "User: " << username <<
-                 " Role: " << role <<
-                 " Password: "  << password <<
-                 " id: " << id << '\n';
-  }
+    std::string username;
+    std::string id;
+    std::string role;
+    std::string password;
+
+    user_t(const std::string username_input,
+          const std::string id_input,
+          const std::string role_input,
+          const std::string password_input)
+          : username(username_input),
+            id(id_input),
+            role(role_input),
+            password(password_input)
+    {
+    }
+
+    void print() const
+    {
+      std::cout << "User: " << username <<
+                  " Role: " << role <<
+                  " Password: "  << password <<
+                  " id: " << id << '\n';
+    }
+  };
 
   std::ostream& operator <<(std::ostream& os, const user_t& user)
   {
@@ -233,7 +254,6 @@ namespace authenticator_api
     auto token_element_p = get_token_element(token_doc, hashed_token);
     if (!token_element_p)
     {
-      std::cout << __FILE__ << ':' << __LINE__ << " Token " << hashed_token << " does not exist\n";
       return true;
     }
 
@@ -255,6 +275,19 @@ namespace authenticator_api
       return true;
     }
     return false;
+  }
+
+  [[nodiscard]] bool has_token_expired(const std::uint64_t hashed_token)
+  {
+    tinyxml2::XMLDocument token_doc;
+    auto result = token_doc.LoadFile(HASH_TOKEN_FILE);
+    if (result != tinyxml2::XML_SUCCESS)
+    {
+      std::cerr << __FILE__ << ":" << __LINE__ << " ERROR: " << result << '\n';
+      return false;
+    }
+    
+    return has_token_expired(token_doc, hashed_token);
   }
 
   [[nodiscard]] tinyxml2::XMLError store_token(const std::uint64_t hashed_token)
@@ -292,24 +325,41 @@ namespace authenticator_api
     return token_doc.ErrorID();
   }
 
-  void add_user(const std::string& username,
-                const std::string& id,
-                const std::string& role,
-                const std::string& password)
+  void response::print() const
   {
+    std::cout << "Response code: " << static_cast<std::uint32_t>(response_codee) << '\n'
+              << "Authorization: " << authorization << '\n'
+              << "Body:          { " << body << " }\n";
+  }
+
+  const response add_user(const std::uint64_t authorization_token,
+                          const std::string& username,
+                          const std::string& id,
+                          const std::string& role,
+                          const std::string& password)
+  {
+    if (has_token_expired(authorization_token))
+    {
+      return response(response_code::UNAUTHORIZED_401,
+                      authorization_token,
+                      string_format("%s:%u Authorization token has expired.", __FILE__, __LINE__));
+    }
     tinyxml2::XMLDocument doc;
     tinyxml2::XMLError result = doc.LoadFile(USER_FILE);
     if (result != tinyxml2::XML_SUCCESS)
     {
-      std::cerr << __FILE__ << ':' << __LINE__ << " ERROR: " << result << '\n';
-      return;
+      return response(response_code::INTERNAL_SERVER_ERROR_500,
+                      0,
+                      string_format("%s:%u ERROR: %u", __FILE__, __LINE__, result));
     }
 
     std::vector<user_t> users;
     result = load_all_users(doc, users);
     if (result != tinyxml2::XML_SUCCESS)
     {
-      return;
+      return response(response_code::INTERNAL_SERVER_ERROR_500,
+                      authorization_token,
+                      string_format("%s:%u ERROR: %u", __FILE__, __LINE__, result));
     }
 
     auto user_it = std::find_if(users.begin(), users.end(), [&username] (const user_t& user)
@@ -319,8 +369,9 @@ namespace authenticator_api
 
     if (user_it != users.end())
     {
-      std::cout << "User '" << username << "' already exists.\n";
-      return;
+      return response(response_code::BAD_REQUEST_400,
+                      authorization_token,
+                      string_format("%s:%u User '%s' already exists.", __FILE__, __LINE__, username.c_str()));
     }
 
     user_t new_user = user_t(username, id, role, password);
@@ -331,31 +382,44 @@ namespace authenticator_api
 
     if (result != tinyxml2::XML_SUCCESS)
     {
-      std::cerr << __FILE__ << ':' << __LINE__ << " ERROR: " << result << '\n';
-      return;
+      return response(response_code::INTERNAL_SERVER_ERROR_500,
+                      authorization_token,
+                      string_format("%s:%u ERROR: %u", __FILE__, __LINE__, result));
     }
 
-    std::cout << "User added:\n" << user_interal_to_xml_string(new_user) << '\n';
     root_p->LinkEndChild(user_xml_element_p);
-    
     doc.SaveFile(USER_FILE);
+    
+    return response(response_code::CREATED_201,
+                    authorization_token,
+                    string_format("User Created:\n", user_interal_to_xml_string(*user_it).c_str()));
   }
 
-  void remove_user(const std::string& username)
+  const response remove_user(const std::uint64_t authorization_token,
+                             const std::string& username)
   {
+    if (has_token_expired(authorization_token))
+    {
+      return response(response_code::UNAUTHORIZED_401,
+                      authorization_token,
+                      string_format("%s:%u Authorization token has expired.", __FILE__, __LINE__));
+    }
     tinyxml2::XMLDocument doc;
     tinyxml2::XMLError result = doc.LoadFile(USER_FILE);
     if (result != tinyxml2::XML_SUCCESS)
     {
-      std::cerr << __FILE__ << ':' << __LINE__ << " ERROR: " << result << '\n';
-      return;
+      return response(response_code::INTERNAL_SERVER_ERROR_500,
+                      authorization_token,
+                      string_format("%s:%u ERROR: %u", __FILE__, __LINE__, result));
     }
 
     std::vector<user_t> users;
     result = load_all_users(doc, users);
     if (result != tinyxml2::XML_SUCCESS)
     {
-      return;
+      return response(response_code::INTERNAL_SERVER_ERROR_500,
+                      authorization_token,
+                      string_format("%s:%u ERROR: %u", __FILE__, __LINE__, result));
     }
 
     auto user_it = std::find_if(users.begin(), users.end(), [&username] (const user_t& user)
@@ -365,82 +429,117 @@ namespace authenticator_api
 
     if (user_it == users.end())
     {
-      std::cout << "User '" << username << "' does not exist.\n";
-      return;
+      return response(response_code::NOT_FOUND_404,
+                      authorization_token,
+                      string_format("%s:%u No user exists with username '%s'", __FILE__, __LINE__, username.c_str()));
     }
 
     auto user_xml_element_p = get_user(doc, (*user_it).username);
     if (!user_xml_element_p)
     {
-      std::cerr << __FILE__ << ':' << __LINE__ << " ERROR: Could not fetch user from XML doc" << '\n';
-      return;
+      return response(response_code::INTERNAL_SERVER_ERROR_500,
+                      authorization_token,
+                      string_format("%s:%u ERROR: Could not fetch user from XML doc", __FILE__, __LINE__));
     }
 
     tinyxml2::XMLElement* root_p = load_root_element(doc, result);
     if (result != tinyxml2::XML_SUCCESS)
     {
-      std::cerr << __FILE__ << ':' << __LINE__ << " ERROR: " << result << '\n';
-      return;
+      return response(response_code::INTERNAL_SERVER_ERROR_500,
+                      authorization_token,
+                      string_format("%s:%u ERROR: %u", __FILE__, __LINE__, result));
     }
     assert(root_p);
 
     root_p->DeleteChild(user_xml_element_p);
-    std::cout << "User deleted:\n" << user_interal_to_xml_string(*user_it) << '\n';
     doc.SaveFile(USER_FILE);
+    
+    return response(response_code::OK_200,
+                    authorization_token,
+                    string_format("User deleted:\n", user_interal_to_xml_string(*user_it).c_str()));
   }
 
-  std::vector<user_t> get_users()
+  const response get_users(const std::uint64_t authorization_token)
   {
+    if (has_token_expired(authorization_token))
+    {
+      return response(response_code::UNAUTHORIZED_401,
+                      authorization_token,
+                      string_format("%s:%u Authorization token has expired.", __FILE__, __LINE__));
+    }
     tinyxml2::XMLDocument doc;
     tinyxml2::XMLError result = doc.LoadFile(USER_FILE);
     if (result != tinyxml2::XML_SUCCESS)
     {
-      std::cerr << __FILE__ << ':' << __LINE__ << " ERROR: " << result << '\n';
-      return {};
+      return response(response_code::INTERNAL_SERVER_ERROR_500,
+                      authorization_token,
+                      string_format("%s:%u ERROR: %u", __FILE__, __LINE__, result));
     }
 
     std::vector<user_t> users;
     result = load_all_users(doc, users);
     if (result != tinyxml2::XML_SUCCESS)
     {
-      return {};
+      return response(response_code::INTERNAL_SERVER_ERROR_500,
+                      authorization_token,
+                      string_format("%s:%u ERROR: %u", __FILE__, __LINE__, result));
     }
 
-    return users;
+    std::ostringstream ss(std::ostringstream::ate);
+    ss << "users: { ";
+    for (std::uint32_t i = 0; i < users.size(); i++)
+    {
+      user_t user = users.at(i);
+      ss << "{ username: " << user.username << ", role: " << user.role << " } " << (i == users.size() - 1 ? "" : ", ");
+    }
+    ss << "}";
+
+    return response(response_code::OK_200,
+                    authorization_token,
+                    ss.str());;
   }
 
-  std::uint64_t login(const std::string& username,
-                      const std::string& password)
+  const response login(const std::string& username,
+                       const std::string& password)
   {
     tinyxml2::XMLDocument doc;
     tinyxml2::XMLError result = doc.LoadFile(USER_FILE);
     if (result != tinyxml2::XML_SUCCESS)
     {
-      std::cerr << __FILE__ << ':' << __LINE__ << " ERROR: " << result << '\n';
-      return 0;
+      return response(response_code::INTERNAL_SERVER_ERROR_500,
+                      0,
+                      string_format("%s:%u ERROR: %u", __FILE__, __LINE__, result));
     }
 
     auto user_xml_element_p = get_user(doc, username);
 
     if (!user_xml_element_p)
     {
-      return 0;
+      return response(response_code::NOT_FOUND_404,
+                      0,
+                      string_format("%s:%u No user exists with username '%s'", __FILE__, __LINE__, username.c_str()));
     }
 
     auto user_interal = user_xml_element_to_interal(user_xml_element_p);
     if (user_interal.password != password)
     {
-      return 0;
+      return response(response_code::UNAUTHORIZED_401,
+                      0,
+                      string_format("%s:%u Invalid Password '%s'", __FILE__, __LINE__, password.c_str()));
     }
 
     std::uint64_t hash = stupid_hash(c_string_format("%s%s", username.c_str(), password.c_str()).get());
     result = store_token(hash);
     if (result != tinyxml2::XML_SUCCESS)
     {
-      return 0;
+      return response(response_code::INTERNAL_SERVER_ERROR_500,
+                      0,
+                      string_format("%s:%u ERROR: %u", __FILE__, __LINE__, result));
     }
 
-    return hash;
+    return response(response_code::OK_200,
+                    hash,
+                    "");
   }
 
 }
