@@ -4,7 +4,6 @@
 
 namespace authenticator_api
 {
-
     enum class response_code
     {
       OK_200 = 200,

@@ -12,12 +12,18 @@
 
 #include "tinyxml2.h"
 
+#ifndef HASH_TOKEN_FILE
 #define HASH_TOKEN_FILE "hashed_tokens.xml"
+#endif
+
 #define TOKEN_ROOT_ELEMENT_STR "hashed_tokens"
 #define TOKEN_ELEMENT_STR "hashed_token"
 #define TOKEN_TIME_ATTRIBUTE_STR "time"
 
+#ifndef USER_FILE
 #define USER_FILE "users.xml"
+#endif
+
 #define USER_STR "user"
 #define USERNAME_STR "username"
 #define ID_STR "id"
@@ -110,6 +116,45 @@ namespace authenticator_api
           " Password: "  << user.password <<
           " id: " << user.id;
     return os;
+  }
+
+  tinyxml2::XMLError create_default_xml_users()
+  {
+    const char* xml =
+      "<?xml version=\"1.0\"?>"
+      "<users>"
+      "<user id=\"admin\">"
+      "    <username>Admin</username>"
+      "    <role>Admin</role>"
+      "    <password>password123</password>"
+      "</user>"
+      "</users>";
+    tinyxml2::XMLDocument doc;
+    tinyxml2::XMLError error = doc.Parse(xml);
+    if (error != tinyxml2::XML_SUCCESS)
+    {
+      return error;
+    }
+
+    error = doc.SaveFile(USER_FILE);
+    return error;
+  }
+
+  tinyxml2::XMLError create_default_xml_hashed_tokens()
+  {
+    const char* xml =
+      "<?xml version=\"1.0\"?>"
+      "<hashed_tokens />";
+    tinyxml2::XMLDocument doc;
+    tinyxml2::XMLError error = doc.Parse(xml);
+    if (error != tinyxml2::XML_SUCCESS)
+    {
+      std::cout << __FILE__ << ':' << __LINE__ << "ERROR while parsing xml: " << error << "\n\n";
+      return error;
+    }
+
+    error = doc.SaveFile(HASH_TOKEN_FILE);
+    return error;
   }
 
   [[nodiscard]] std::string user_interal_to_xml_string(const user_t& internal_user)
@@ -260,8 +305,8 @@ namespace authenticator_api
     try
     {
       std::uint64_t token_timestamp = std::stoul(token_element_p->Attribute(TOKEN_TIME_ATTRIBUTE_STR));
-      std::uint64_t current_time = get_current_time();
-      assert(current_time > token_timestamp);
+      std::uint64_t current_time = get_current_time(); 
+      assert(current_time >= token_timestamp);
       std::uint64_t token_passed_time = current_time - token_timestamp;
       if (token_passed_time > TOKEN_EXPIRATION_TIME)
       {
@@ -281,9 +326,20 @@ namespace authenticator_api
   {
     tinyxml2::XMLDocument token_doc;
     auto result = token_doc.LoadFile(HASH_TOKEN_FILE);
+
+    // No file found. Try to create new file.
+    if (result == tinyxml2::XML_ERROR_FILE_NOT_FOUND)
+    {
+      result = create_default_xml_hashed_tokens();
+      if (result != tinyxml2::XML_SUCCESS)
+      {
+        return result;
+      }
+      result = token_doc.LoadFile(HASH_TOKEN_FILE);
+    }
+
     if (result != tinyxml2::XML_SUCCESS)
     {
-      std::cerr << __FILE__ << ":" << __LINE__ << " ERROR: " << result << '\n';
       return false;
     }
     
@@ -504,11 +560,22 @@ namespace authenticator_api
   {
     tinyxml2::XMLDocument doc;
     tinyxml2::XMLError result = doc.LoadFile(USER_FILE);
+
+    // No file found. Try to create new file.
+    if (result == tinyxml2::XML_ERROR_FILE_NOT_FOUND)
+    {
+      result = create_default_xml_users();
+      if (result == tinyxml2::XML_SUCCESS)
+      {
+        result = doc.LoadFile(HASH_TOKEN_FILE);
+      }
+    }
+
     if (result != tinyxml2::XML_SUCCESS)
     {
       return response(response_code::INTERNAL_SERVER_ERROR_500,
                       0,
-                      string_format("%s:%u ERROR: %u", __FILE__, __LINE__, result));
+                      string_format("%s:%u ERROR: %u - Could not load file: %s", __FILE__, __LINE__, result, USER_FILE));
     }
 
     auto user_xml_element_p = get_user(doc, username);
