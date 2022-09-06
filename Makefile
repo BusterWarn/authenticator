@@ -23,7 +23,8 @@ tests:
 	$(MAKE) TEST=1 unit_tests
 
 unit_tests: library_static test/unit_tests.cpp
-	${CXX} ${CXXFLAGS} test/unit_tests.cpp -iquote include -B build -L. -lauthenticator -o build/authenticator_unit_test
+	${CXX} ${CXXFLAGS} test/unit_tests.cpp -iquote include -iquote src -B build -L. -lauthenticator -o build/authenticator_unit_test \
+	-DHASH_TOKEN_FILE=${HASH_TOKEN_FILE} -DUSER_FILE=${USER_FILE}
 
 main:	library_static
 	${CXX} ${CXXFLAGS} test/test.cpp -iquote include -B build -L. -lauthenticator -o build/authenticator

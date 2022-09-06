@@ -118,45 +118,6 @@ namespace authenticator_api
     return os;
   }
 
-  tinyxml2::XMLError create_default_xml_users()
-  {
-    const char* xml =
-      "<?xml version=\"1.0\"?>"
-      "<users>"
-      "<user id=\"admin\">"
-      "    <username>Admin</username>"
-      "    <role>Admin</role>"
-      "    <password>password123</password>"
-      "</user>"
-      "</users>";
-    tinyxml2::XMLDocument doc;
-    tinyxml2::XMLError error = doc.Parse(xml);
-    if (error != tinyxml2::XML_SUCCESS)
-    {
-      return error;
-    }
-
-    error = doc.SaveFile(USER_FILE);
-    return error;
-  }
-
-  tinyxml2::XMLError create_default_xml_hashed_tokens()
-  {
-    const char* xml =
-      "<?xml version=\"1.0\"?>"
-      "<hashed_tokens />";
-    tinyxml2::XMLDocument doc;
-    tinyxml2::XMLError error = doc.Parse(xml);
-    if (error != tinyxml2::XML_SUCCESS)
-    {
-      std::cout << __FILE__ << ':' << __LINE__ << "ERROR while parsing xml: " << error << "\n\n";
-      return error;
-    }
-
-    error = doc.SaveFile(HASH_TOKEN_FILE);
-    return error;
-  }
-
   [[nodiscard]] std::string user_interal_to_xml_string(const user_t& internal_user)
   {
     return string_format("<user id=\"%s\">\n"
@@ -245,7 +206,7 @@ namespace authenticator_api
     tinyxml2::XMLElement* root_p = load_root_element(doc, result);
     if (result != tinyxml2::XML_SUCCESS)
     {
-      std::cerr << __FILE__ << ':' << __LINE__ << " ERROR: " << result << '\n';
+      std::cerr << __FILE__ << ':' << __LINE__ << " ERROR: Could not load root element (" << result << ")\n";
       return nullptr;
     }
     assert(root_p);
@@ -326,17 +287,6 @@ namespace authenticator_api
   {
     tinyxml2::XMLDocument token_doc;
     auto result = token_doc.LoadFile(HASH_TOKEN_FILE);
-
-    // No file found. Try to create new file.
-    if (result == tinyxml2::XML_ERROR_FILE_NOT_FOUND)
-    {
-      result = create_default_xml_hashed_tokens();
-      if (result != tinyxml2::XML_SUCCESS)
-      {
-        return result;
-      }
-      result = token_doc.LoadFile(HASH_TOKEN_FILE);
-    }
 
     if (result != tinyxml2::XML_SUCCESS)
     {
@@ -448,7 +398,7 @@ namespace authenticator_api
     
     return response(response_code::CREATED_201,
                     authorization_token,
-                    string_format("User Created:\n", user_interal_to_xml_string(*user_it).c_str()));
+                    string_format("User Created:\n", user_interal_to_xml_string(new_user).c_str()));
   }
 
   const response remove_user(const std::uint64_t authorization_token,
@@ -560,16 +510,6 @@ namespace authenticator_api
   {
     tinyxml2::XMLDocument doc;
     tinyxml2::XMLError result = doc.LoadFile(USER_FILE);
-
-    // No file found. Try to create new file.
-    if (result == tinyxml2::XML_ERROR_FILE_NOT_FOUND)
-    {
-      result = create_default_xml_users();
-      if (result == tinyxml2::XML_SUCCESS)
-      {
-        result = doc.LoadFile(HASH_TOKEN_FILE);
-      }
-    }
 
     if (result != tinyxml2::XML_SUCCESS)
     {
