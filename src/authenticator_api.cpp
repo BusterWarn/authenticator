@@ -16,13 +16,13 @@
 #define HASH_TOKEN_FILE "hashed_tokens.xml"
 #endif
 
-#define TOKEN_ROOT_ELEMENT_STR "hashed_tokens"
-#define TOKEN_ELEMENT_STR "hashed_token"
-#define TOKEN_TIME_ATTRIBUTE_STR "time"
-
 #ifndef USER_FILE
 #define USER_FILE "users.xml"
 #endif
+
+#define TOKEN_ROOT_ELEMENT_STR "hashed_tokens"
+#define TOKEN_ELEMENT_STR "hashed_token"
+#define TOKEN_TIME_ATTRIBUTE_STR "time"
 
 #define USER_STR "user"
 #define USERNAME_STR "username"
@@ -310,10 +310,6 @@ namespace authenticator_api
     auto token_element_p = get_token_element(token_doc, hashed_token);
     if (token_element_p)
     {
-      if (has_token_expired(token_doc, hashed_token))
-      {
-        std::cout << "Token is previously expired\n";
-      }
       token_element_p->SetAttribute(TOKEN_TIME_ATTRIBUTE_STR, current_time);
     }
     else
