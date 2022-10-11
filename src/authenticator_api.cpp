@@ -37,7 +37,7 @@ namespace authenticator_api
   /**
    * djb2 hash function. No idea what it does but it works!
    */
-  std::uint64_t stupid_hash(const char *str)
+  [[nodiscard]] std::uint64_t stupid_hash(const char *str)
   {
       std::uint64_t hash = 5381;
       int c;
@@ -55,7 +55,7 @@ namespace authenticator_api
 
   // Code from https://stackoverflow.com/questions/2342162/stdstring-formatting-like-sprintf
   template<typename ... Args>
-  std::unique_ptr<char[]> c_string_format( const char* format, Args ... args )
+  [[nodiscard]] std::unique_ptr<char[]> c_string_format( const char* format, Args ... args )
   {
     int size_s = std::snprintf( nullptr, 0, format, args ... ) + 1; // Extra space for '\0'
     if( size_s <= 0 ) { throw std::runtime_error( "Error during formatting." ); }
@@ -66,7 +66,7 @@ namespace authenticator_api
   }
 
   template<typename ... Args>
-  std::string string_format( const char* format, Args ... args )
+  [[nodiscard]] std::string string_format( const char* format, Args ... args )
   {
     int size_s = std::snprintf( nullptr, 0, format, args ... );
     if( size_s <= 0 ) { throw std::runtime_error( "Error during formatting." ); }
@@ -75,7 +75,7 @@ namespace authenticator_api
     return std::string( buf.get(), buf.get() + size ); // We don't want the '\0' inside
   }
   
-  std::uint64_t get_current_time()
+  [[nodiscard]] std::uint64_t get_current_time()
   {
     const auto system_clock = std::chrono::system_clock::now();
     return std::chrono::duration_cast<std::chrono::seconds>(system_clock.time_since_epoch()).count();
